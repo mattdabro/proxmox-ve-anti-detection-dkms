@@ -9,6 +9,8 @@ function SafeCim([string]$Name) {
 $bios = @(SafeCim 'Win32_BIOS' | Select-Object Manufacturer, SMBIOSBIOSVersion, Version)
 $thermal = @(SafeCim 'Win32_TemperatureProbe' | Select-Object Name, Status, CurrentReading)
 $fan = @(SafeCim 'Win32_Fan' | Select-Object Name, Status, DesiredSpeed)
+$thermalZones = @(try { Get-CimInstance -Namespace 'root/wmi' -ClassName 'MSAcpi_ThermalZoneTemperature' -ErrorAction Stop | Select-Object InstanceName, CurrentTemperature } catch { @() })
+$voltage = @(SafeCim 'Win32_VoltageProbe' | Select-Object Name, Status, CurrentReading, NominalReading)
 $acpi = @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue |
     Where-Object { $_.InstanceId -match '^ACPI\\' } |
     Select-Object FriendlyName, InstanceId, Status)
@@ -22,7 +24,17 @@ $report = [ordered]@{
     AcpiDevices = $acpi
     WmiTemperatureProbes = $thermal
     WmiFans = $fan
+    WmiVoltageProbes = $voltage
+    AcpiThermalZoneReadings = @($thermalZones | ForEach-Object {
+        [pscustomobject]@{
+            InstanceName = $_.InstanceName
+            TemperatureCelsius = if ($null -ne $_.CurrentTemperature) { [math]::Round(($_.CurrentTemperature / 10.0) - 273.15, 2) } else { $null }
+            RawDeciKelvin = $_.CurrentTemperature
+        }
+    })
     Notes = @(
+        'ACPI WMI thermal zone is queried from root/wmi; absence is not a sensor failure.',
+        'Voltage probes and fan classes may be empty even if virtual PCI telemetry exists.',
         'FirmwareType 2 indicates UEFI when the registry value is present.',
         'SMBIOS firmware fields are not the EFI System Table FirmwareVendor pointer.',
         'An empty Win32_Fan or Win32_TemperatureProbe result does not prove sensor hardware is absent.',
