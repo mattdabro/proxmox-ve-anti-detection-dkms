@@ -1,0 +1,28 @@
+name: Static quality checks
+on:
+  push:
+    branches: [main, 'improve/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Bash syntax
+        run: |
+          bash -n scripts/pve-qemu-anti-detection
+          bash -n debian/postinst
+          bash -n debian/postrm
+      - name: Verify packaging and build safety guards
+        run: python3 tests/test_safety_guards.py
+      - name: Check Debian packaging metadata
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debhelper devscripts dpkg-dev
+          dpkg-parsechangelog -S Version
+          dpkg-buildpackage -us -uc -b
