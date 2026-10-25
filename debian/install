@@ -3,3 +3,7 @@ scripts/pve-qemu-anti-detection usr/bin
 conf/pve-qemu-anti-detection.conf etc
 hooks/99-pve-qemu-anti-detection etc/apt/apt.conf.d
 systemd/pve-qemu-anti-detection-rebuild.service lib/systemd/system
+hwmon/install-source-overlay.sh usr/lib/pve-qemu-anti-detection/hwmon
+hwmon/inject-build-rule.py usr/lib/pve-qemu-anti-detection/hwmon
+hwmon/qemu/pve-lab-hwmon.c usr/lib/pve-qemu-anti-detection/hwmon/qemu
+hwmon/acpi/PVEHWMON.dsl usr/share/pve-qemu-anti-detection/acpi
