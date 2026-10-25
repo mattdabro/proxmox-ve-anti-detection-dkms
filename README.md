@@ -201,6 +201,33 @@ On a Lenovo ThinkCentre M720t desktop host, values seen by the guest (Linux, rea
 
 ### What This Patch Does NOT Cover
 
+These vectors are **not automatically disguised** by the QEMU source patch. The tools below add **visibility and compatibility validation**, not anti-cheat bypasses.
+
+Run on the Proxmox host:
+
+```bash
+python3 scripts/pve-vm-audit.py 100 --output vm-100-audit.json
+```
+
+Run on the Windows guest (PowerShell 5.1+):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows-hardware-inventory.ps1 > hardware.json
+```
+
+Reports may contain serial numbers and device identifiers. Review before sharing.
+
+| Previously uncovered vector | Implemented diagnostic coverage | Remaining limitation |
+|---|---|---|
+| VirtIO PCI vendor ID (`0x1af4`) | Enumerates VirtIO network/disk configuration on host and relevant PCI devices in Windows | IDs remain unchanged for driver compatibility |
+| CPUID hypervisor bit | Reports Windows `HypervisorPresent`, host virtualization support, CPU config and custom QEMU arguments | Does not directly decode CPUID leaf 1 bit 31; does not suppress virtualization indicators |
+| RDTSC/RDTSCP timing | Documents need for independent latency benchmarking | No kernel patch, timing manipulation, or validated VM-exit distribution |
+| EFI `FirmwareVendor` | Inspects OVMF/EFI disk configuration and guest BIOS metadata | Does not read EFI System Table vendor directly or rebuild EDK2 |
+| WMI sensor queries | Records `Win32_Fan` and `Win32_TemperatureProbe` object counts | Does not fabricate hardware sensor readings or ACPI devices |
+| VirtIO driver names | Inventories relevant Windows signed drivers | Does not rename or modify guest drivers |
+
+**Do not interpret a missing indicator as proof that virtualization is undetectable.** 
+
 | Detection Vector | Reason |
 |-----------------|--------|
 | VirtIO PCI vendor ID (`0x1af4`) | Cannot change — guest VirtIO drivers match by vendor/device ID. Changing breaks boot. |
