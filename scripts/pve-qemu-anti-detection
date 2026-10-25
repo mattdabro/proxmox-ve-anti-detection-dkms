@@ -260,14 +260,15 @@ do_install() {
     # after upstream source preparation/cleanup. Fail closed if staging cannot run.
     if [[ "$ENABLE_LAB_HWMON" == "yes" ]]; then
         [[ -x "$HWMON_OVERLAY" ]] || { log_error "Missing optional HWMON overlay installer: $HWMON_OVERLAY"; return 1; }
-        local overlay_line
-        overlay_line=$(printf "\\t%s ." "$HWMON_OVERLAY")
-        if ! grep -Fq "$HWMON_OVERLAY ." debian/rules; then
-            # The existing patch command runs from the inner QEMU source tree.
-            # Ensure only its first instance is altered.
-            sed -i "\\|patch -p1 < ${patch_file}|a\\\\${overlay_line}" debian/rules
-        fi
-        grep -Fq "$HWMON_OVERLAY ." debian/rules || { log_error "Could not hook HWMON staging into QEMU build"; return 1; }
+        python3 /usr/lib/pve-qemu-anti-detection/hwmon/inject-build-rule.py \
+            debian/rules "$patch_file" "$HWMON_OVERLAY" || {
+            log_error "Failed to insert HWMON stage into QEMU build rules"
+            return 1
+        }
+        grep -Fq "$HWMON_OVERLAY ." debian/rules || {
+            log_error "QEMU build rule does not contain the HWMON stage"
+            return 1
+        }
         log "Enabled optional PCI lab HWMON source overlay in QEMU build rules"
     elif [[ "$ENABLE_LAB_HWMON" != "no" ]]; then
         log_error "ENABLE_LAB_HWMON must be yes or no"
