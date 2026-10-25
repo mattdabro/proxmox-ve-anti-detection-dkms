@@ -18,12 +18,16 @@ jobs:
           bash -n scripts/pve-qemu-anti-detection
           bash -n debian/postinst
           bash -n debian/postrm
+          bash -n hwmon/install-source-overlay.sh
+          bash -n hwmon/compile-acpi.sh
           for f in diagnostics/host/*.sh; do bash -n "$f"; done
           python3 -m unittest discover -s tests -p "test_*.py"
           python3 -m py_compile diagnostics/host/hwmon-inventory.py
           test -s diagnostics/windows/cpuid-audit.c
           test -s diagnostics/windows/tsc-bench.c
           test -s diagnostics/README.md
+          test -s hwmon/qemu/pve-lab-hwmon.c
+          test -s hwmon/acpi/PVEHWMON.dsl
       - name: Verify packaging and build safety guards
         run: python3 tests/test_safety_guards.py
       - name: Check Debian packaging metadata
