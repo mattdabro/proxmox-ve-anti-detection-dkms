@@ -23,6 +23,8 @@ jobs:
           for f in diagnostics/host/*.sh; do bash -n "$f"; done
           python3 -m unittest discover -s tests -p "test_*.py"
           python3 -m py_compile diagnostics/host/hwmon-inventory.py
+          python3 -m py_compile hwmon/inject-build-rule.py
+          python3 -m unittest discover -s hwmon/tests -p 'test_*.py'
           test -s diagnostics/windows/cpuid-audit.c
           test -s diagnostics/windows/tsc-bench.c
           test -s diagnostics/README.md
