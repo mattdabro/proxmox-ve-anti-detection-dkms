@@ -112,10 +112,9 @@ find_pve_qemu_commit() {
         return 0
     fi
 
-    # If no match, use the latest commit
-    log_warn "No exact match for version $version, using latest commit"
-    git checkout main 2>/dev/null || git checkout master 2>/dev/null || true
-    return 0
+    log_error "No source revision matching pve-qemu-kvm version $version"
+    log_error "Refusing to build unrelated source. Check repository tags and package version."
+    return 1
 }
 
 ensure_build_deps() {
@@ -236,8 +235,8 @@ do_install() {
     # Install build dependencies via mk-build-deps
     log "Installing build dependencies (this may take a while)..."
     if ! mk-build-deps --install --tool='apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends --yes' debian/control >> "$LOG_FILE" 2>&1; then
-        log_warn "mk-build-deps had issues, attempting to continue..."
-        apt-get install -f -y >> "$LOG_FILE" 2>&1 || true
+        log_error "Could not install build dependencies; aborting"
+        return 1
     fi
 
     # Initialize submodules
@@ -245,9 +244,9 @@ do_install() {
     if [ -n "$QEMU_GIT_MIRROR" ]; then
         log "Rewriting QEMU submodule URL to mirror: $QEMU_GIT_MIRROR"
         sed -i "s|git://git.proxmox.com/git/mirror_qemu.git|${QEMU_GIT_MIRROR}|g" .gitmodules 2>/dev/null || true
-        git submodule sync >> "$LOG_FILE" 2>&1 || true
+        git submodule sync >> "$LOG_FILE" 2>&1
     fi
-    git submodule update --init >> "$LOG_FILE" 2>&1 || true
+    git submodule update --init >> "$LOG_FILE" 2>&1
 
     # Reference the patch by absolute path. A copy inside qemu/ would be an
     # untracked file, and upstream debian/rules runs "git clean -xdfi" on a copy
@@ -265,15 +264,8 @@ do_install() {
     if make -j"$BUILD_JOBS" < /dev/null >> "$LOG_FILE" 2>&1; then
         log_success "Build completed successfully!"
     else
-        # Build might "fail" at the dpkg-source step but still produce the .deb
-        local deb_file
-        deb_file=$(find "$BUILD_DIR/pve-qemu" -maxdepth 1 -name "pve-qemu-kvm_*.deb" -type f | head -1)
-        if [ -n "$deb_file" ]; then
-            log_warn "Build reported errors but .deb was produced (this is expected)"
-        else
-            log_error "Build failed. Check log: $LOG_FILE"
-            exit 1
-        fi
+        log_error "Build failed. Refusing to install potentially stale artifacts. Check $LOG_FILE"
+        return 1
     fi
 
     # Find the built .deb
@@ -288,7 +280,7 @@ do_install() {
 
     # Install the patched .deb
     log "Installing patched pve-qemu-kvm..."
-    if dpkg -i --force-all "$deb_file" >> "$LOG_FILE" 2>&1; then
+    if dpkg -i "$deb_file" >> "$LOG_FILE" 2>&1; then
         log_success "Patched pve-qemu-kvm installed successfully!"
     else
         log_error "Failed to install patched .deb"
@@ -369,7 +361,10 @@ do_upgrade() {
     log "Update available: $update_info"
 
     # Upgrade the package first
-    apt-get install -y pve-qemu-kvm >> "$LOG_FILE" 2>&1 || true
+    if ! apt-get install -y pve-qemu-kvm >> "$LOG_FILE" 2>&1; then
+        log_error "Package upgrade failed; refusing to rebuild"
+        return 1
+    fi
 
     local new_version
     new_version=$(get_installed_version)
@@ -584,6 +579,17 @@ EOF
 
 # Main
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
+# Serialize operations that change host packages or build artifacts.
+# flock's descriptor is inherited by child processes until the command exits.
+acquire_lock() {
+    local lock_dir="/run/lock"
+    mkdir -p "$lock_dir"
+    exec 9>"$lock_dir/pve-qemu-anti-detection.lock"
+    if ! flock -n 9; then
+        log_error "Another pve-qemu-anti-detection operation is running"
+        exit 75
+    fi
+}
 
 # Parse global flags
 while [ $# -gt 0 ]; do
@@ -600,12 +606,15 @@ done
 
 case "${1:-help}" in
     install)
+        acquire_lock
         do_install "${2:-}"
         ;;
     rebuild)
+        acquire_lock
         do_rebuild
         ;;
     upgrade)
+        acquire_lock
         do_upgrade
         ;;
     status)
