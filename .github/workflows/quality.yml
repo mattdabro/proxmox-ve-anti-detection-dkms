@@ -36,3 +36,9 @@ jobs:
           sudo apt-get install -y debhelper devscripts dpkg-dev
           dpkg-parsechangelog -S Version
           dpkg-buildpackage -us -uc -b
+
+      - name: Compile HWMON ACPI SSDT
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y acpica-tools
+          bash hwmon/compile-acpi.sh "$RUNNER_TEMP/pve-hwmon-acpi"
