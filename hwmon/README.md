@@ -57,3 +57,17 @@ QEMU object model, Meson, reset, timer migration, and ACPI behavior can change
 by version. Static review and a disposable host build/boot test are mandatory
 before production deployment. No physical hardware spoofing or bypass claim
 is made.
+
+## Opt-in integration with the repository package builder
+
+The optional QEMU device can now be staged by the existing `pve-qemu-anti-detection install` and `rebuild` workflows **when the package includes these files**. This feature is disabled by default. Set the following in `/etc/pve-qemu-anti-detection.conf`:
+
+```sh
+ENABLE_LAB_HWMON="yes"
+```
+
+The build inserts a separate source-overlay command immediately after the existing QEMU patch recipe. It is intended to run after source cleanup, before QEMU configuration and compilation. A missing overlay installer or mismatched makefile rule aborts the build. Verify with a disposable Proxmox node and inspect generated `debian/rules` before attempting deployment. 
+
+This still **does not automatically attach the device to any VM**, ship a Windows MMIO driver, or install an AML table to the guest. Validate the compiled `pve-lab-hwmon` QEMU device first and use the separately compiled AML only with a topology that matches its `_ADR` declaration.
+
+The bundled DSL lives in `/usr/share/pve-qemu-anti-detection/acpi/`. It is not compiled during Debian packaging; `acpica-tools` is required for a separate guest-table build. 
